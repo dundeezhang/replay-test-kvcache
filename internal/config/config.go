@@ -33,6 +33,10 @@ type Config struct {
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 
+	// ShutdownTimeout bounds how long in-flight requests may keep running
+	// after SIGTERM before the server closes their connections.
+	ShutdownTimeout time.Duration
+
 	// LogRequests enables per-request access logging.
 	LogRequests bool
 }
@@ -51,6 +55,8 @@ func Default() Config {
 
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 5 * time.Second,
+
+		ShutdownTimeout: 15 * time.Second,
 
 		LogRequests: false,
 	}
@@ -91,6 +97,9 @@ func load(lookup lookupFunc) (Config, error) {
 	if err := durationVar(lookup, "KVCACHE_WRITE_TIMEOUT", &cfg.WriteTimeout); err != nil {
 		return Config{}, err
 	}
+	if err := durationVar(lookup, "KVCACHE_SHUTDOWN_TIMEOUT", &cfg.ShutdownTimeout); err != nil {
+		return Config{}, err
+	}
 	if err := boolVar(lookup, "KVCACHE_LOG_REQUESTS", &cfg.LogRequests); err != nil {
 		return Config{}, err
 	}
@@ -117,6 +126,9 @@ func (c Config) Validate() error {
 	}
 	if c.MaxKeyBytes <= 0 {
 		return fmt.Errorf("config: KVCACHE_MAX_KEY_BYTES must be positive, got %d", c.MaxKeyBytes)
+	}
+	if c.ShutdownTimeout < 0 {
+		return fmt.Errorf("config: KVCACHE_SHUTDOWN_TIMEOUT must not be negative, got %s", c.ShutdownTimeout)
 	}
 	if c.ReadTimeout <= 0 || c.WriteTimeout <= 0 {
 		return fmt.Errorf("config: request timeouts must be positive")

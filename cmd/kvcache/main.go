@@ -2,9 +2,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/dundeezhang/replay-test-kvcache/internal/config"
 	"github.com/dundeezhang/replay-test-kvcache/internal/server"
@@ -41,8 +44,23 @@ func main() {
 		WriteTimeout: cfg.WriteTimeout,
 	}
 
-	logger.Printf("listening on %s (shards=%d)", cfg.ListenAddr, cfg.ShardCount)
-	if err := srv.ListenAndServe(); err != nil {
-		logger.Fatalf("serve: %v", err)
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		logger.Printf("listening on %s (shards=%d)", cfg.ListenAddr, cfg.ShardCount)
+		if err := srv.ListenAndServe(); err != nil {
+			logger.Fatalf("serve: %v", err)
+		}
+	}()
+
+	sig := <-sigCh
+	logger.Printf("received %s, draining connections (timeout %s)", sig, cfg.ShutdownTimeout)
+
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Printf("shutdown: %v", err)
 	}
+	logger.Printf("shutdown complete")
 }

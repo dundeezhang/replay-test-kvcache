@@ -25,11 +25,12 @@ func TestLoadDefaults(t *testing.T) {
 
 func TestLoadOverrides(t *testing.T) {
 	cfg, err := load(env(map[string]string{
-		"KVCACHE_LISTEN_ADDR":     "127.0.0.1:9000",
-		"KVCACHE_SHARDS":          "16",
-		"KVCACHE_MAX_VALUE_BYTES": "4096",
-		"KVCACHE_READ_TIMEOUT":    "250ms",
-		"KVCACHE_LOG_REQUESTS":    "true",
+		"KVCACHE_LISTEN_ADDR":      "127.0.0.1:9000",
+		"KVCACHE_SHARDS":           "16",
+		"KVCACHE_MAX_VALUE_BYTES":  "4096",
+		"KVCACHE_READ_TIMEOUT":     "250ms",
+		"KVCACHE_SHUTDOWN_TIMEOUT": "1m",
+		"KVCACHE_LOG_REQUESTS":     "true",
 	}))
 	if err != nil {
 		t.Fatalf("load: %v", err)
@@ -45,6 +46,9 @@ func TestLoadOverrides(t *testing.T) {
 	}
 	if cfg.ReadTimeout != 250*time.Millisecond {
 		t.Errorf("ReadTimeout = %s", cfg.ReadTimeout)
+	}
+	if cfg.ShutdownTimeout != time.Minute {
+		t.Errorf("ShutdownTimeout = %s", cfg.ShutdownTimeout)
 	}
 	if !cfg.LogRequests {
 		t.Errorf("LogRequests = false, want true")
