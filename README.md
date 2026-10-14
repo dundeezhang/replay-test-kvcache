@@ -24,6 +24,22 @@ make race       # unit tests with the race detector
 
 Requires Go 1.22 or newer (the router uses method and wildcard patterns).
 
+## Authentication
+
+When `KVCACHE_TOKEN` is set, every request except `GET /healthz` must carry
+`Authorization: Bearer <token>`; anything else gets `401` with a
+`WWW-Authenticate` challenge. Leave it unset only on a trusted network.
+
+To rotate the token without downtime:
+
+1. Set `KVCACHE_TOKEN_NEXT` to the new token and restart; both are accepted.
+2. Move clients over to the new token.
+3. Promote it to `KVCACHE_TOKEN`, unset `KVCACHE_TOKEN_NEXT`, and restart.
+
+```sh
+curl -H "Authorization: Bearer $KVCACHE_TOKEN" localhost:7070/v1/stats
+```
+
 ## Configuration
 
 All settings come from environment variables.
@@ -31,6 +47,8 @@ All settings come from environment variables.
 | Variable | Default | Description |
 | --- | --- | --- |
 | `KVCACHE_LISTEN_ADDR` | `:7070` | Address the HTTP API listens on. |
+| `KVCACHE_TOKEN` | unset | Bearer token required on every request except `/healthz`. |
+| `KVCACHE_TOKEN_NEXT` | unset | Second accepted token, used while rotating `KVCACHE_TOKEN`. |
 | `KVCACHE_SHARDS` | `64` | Number of shards; must be a power of two. |
 | `KVCACHE_MAX_VALUE_BYTES` | `1048576` | Largest accepted value. |
 | `KVCACHE_MAX_KEY_BYTES` | `250` | Longest accepted key. |

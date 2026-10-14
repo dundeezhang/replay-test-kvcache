@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dundeezhang/replay-test-kvcache/internal/auth"
 	"github.com/dundeezhang/replay-test-kvcache/internal/config"
 	"github.com/dundeezhang/replay-test-kvcache/internal/store"
 )
@@ -54,6 +55,11 @@ func (s *Server) Handler() http.Handler {
 	if s.cfg.LogRequests {
 		h = s.logRequests(h)
 	}
+	h = auth.New(auth.Options{
+		Tokens: s.cfg.AuthTokens(),
+		Exempt: []string{"/healthz"},
+		Logger: s.logger,
+	}).Wrap(h)
 	return h
 }
 
