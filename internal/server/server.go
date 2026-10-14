@@ -21,6 +21,7 @@ type Server struct {
 	mux       *http.ServeMux
 	logger    *log.Logger
 	startedAt time.Time
+	snapshots Snapshotter
 }
 
 // New builds a Server. A nil logger discards log output.
@@ -42,6 +43,7 @@ func New(st *store.Store, cfg config.Config, logger *log.Logger) *Server {
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", s.handleHealth)
 	s.mux.HandleFunc("GET /v1/stats", s.handleStats)
+	s.mux.HandleFunc("POST /v1/admin/snapshot", s.handleSnapshot)
 	s.mux.HandleFunc("GET /v1/keys", s.handleListKeys)
 	s.mux.HandleFunc("GET /v1/keys/{key}", s.handleGet)
 	s.mux.HandleFunc("PUT /v1/keys/{key}", s.handleSet)

@@ -29,6 +29,13 @@ type Config struct {
 
 	// LogRequests enables per-request access logging.
 	LogRequests bool
+
+	// SnapshotDir enables periodic on-disk snapshots when non-empty.
+	// SnapshotInterval is the time between snapshots and SnapshotRetain is
+	// how many snapshot files are kept.
+	SnapshotDir      string
+	SnapshotInterval time.Duration
+	SnapshotRetain   int
 }
 
 // Default returns the configuration used when no overrides are set.
@@ -44,6 +51,9 @@ func Default() Config {
 		WriteTimeout: 5 * time.Second,
 
 		LogRequests: false,
+
+		SnapshotInterval: 5 * time.Minute,
+		SnapshotRetain:   3,
 	}
 }
 
@@ -79,6 +89,15 @@ func load(lookup lookupFunc) (Config, error) {
 	if err := boolVar(lookup, "KVCACHE_LOG_REQUESTS", &cfg.LogRequests); err != nil {
 		return Config{}, err
 	}
+	if v, ok := lookup("KVCACHE_SNAPSHOT_DIR"); ok {
+		cfg.SnapshotDir = v
+	}
+	if err := durationVar(lookup, "KVCACHE_SNAPSHOT_INTERVAL", &cfg.SnapshotInterval); err != nil {
+		return Config{}, err
+	}
+	if err := intVar(lookup, "KVCACHE_SNAPSHOT_RETAIN", &cfg.SnapshotRetain); err != nil {
+		return Config{}, err
+	}
 
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -99,6 +118,14 @@ func (c Config) Validate() error {
 	}
 	if c.ReadTimeout <= 0 || c.WriteTimeout <= 0 {
 		return fmt.Errorf("config: request timeouts must be positive")
+	}
+	if c.SnapshotDir != "" {
+		if c.SnapshotInterval < time.Second {
+			return fmt.Errorf("config: KVCACHE_SNAPSHOT_INTERVAL must be at least 1s, got %s", c.SnapshotInterval)
+		}
+		if c.SnapshotRetain < 1 {
+			return fmt.Errorf("config: KVCACHE_SNAPSHOT_RETAIN must be at least 1, got %d", c.SnapshotRetain)
+		}
 	}
 	return nil
 }
