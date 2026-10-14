@@ -53,11 +53,13 @@ func TestLoadOverrides(t *testing.T) {
 
 func TestLoadRejectsInvalid(t *testing.T) {
 	cases := map[string]map[string]string{
-		"non power of two shards": {"KVCACHE_SHARDS": "12"},
-		"zero shards":             {"KVCACHE_SHARDS": "0"},
-		"garbage int":             {"KVCACHE_MAX_KEY_BYTES": "lots"},
-		"garbage duration":        {"KVCACHE_WRITE_TIMEOUT": "soon"},
-		"garbage bool":            {"KVCACHE_LOG_REQUESTS": "yes please"},
+		"non power of two shards":    {"KVCACHE_SHARDS": "12"},
+		"zero shards":                {"KVCACHE_SHARDS": "0"},
+		"garbage int":                {"KVCACHE_MAX_KEY_BYTES": "lots"},
+		"garbage duration":           {"KVCACHE_WRITE_TIMEOUT": "soon"},
+		"garbage bool":               {"KVCACHE_LOG_REQUESTS": "yes please"},
+		"janitor interval too small": {"KVCACHE_JANITOR_INTERVAL": "1ms"},
+		"janitor sample size zero":   {"KVCACHE_JANITOR_SAMPLE_SIZE": "0"},
 	}
 	for name, vars := range cases {
 		t.Run(name, func(t *testing.T) {

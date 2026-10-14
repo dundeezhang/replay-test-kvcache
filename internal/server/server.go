@@ -46,6 +46,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /v1/keys/{key}", s.handleGet)
 	s.mux.HandleFunc("PUT /v1/keys/{key}", s.handleSet)
 	s.mux.HandleFunc("DELETE /v1/keys/{key}", s.handleDelete)
+	s.mux.HandleFunc("GET /v1/keys/{key}/ttl", s.handleGetTTL)
+	s.mux.HandleFunc("PUT /v1/keys/{key}/ttl", s.handleSetTTL)
+	s.mux.HandleFunc("DELETE /v1/keys/{key}/ttl", s.handlePersist)
 }
 
 // Handler returns the root HTTP handler with middleware applied.
@@ -110,7 +113,14 @@ func (s *Server) handleSet(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "read body: "+err.Error())
 		return
 	}
-	version, err := s.store.Set(key, body)
+
+	ttl, err := parseTTLParam(r.URL.Query().Get("ttl"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	version, err := s.store.SetWithTTL(key, body, ttl)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -165,7 +175,7 @@ func writeStoreError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, store.ErrEmptyKey), errors.Is(err, store.ErrKeyTooLarge):
+	case errors.Is(err, store.ErrEmptyKey), errors.Is(err, store.ErrKeyTooLarge), errors.Is(err, store.ErrInvalidTTL):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, store.ErrValueTooLarge):
 		writeError(w, http.StatusRequestEntityTooLarge, err.Error())

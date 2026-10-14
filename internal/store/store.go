@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
@@ -40,6 +41,9 @@ type Store struct {
 	shards []*shard
 	mask   uint32
 	opts   Options
+
+	// now is the store's clock. Tests replace it to control expiry.
+	now func() time.Time
 }
 
 type shard struct {
@@ -50,6 +54,10 @@ type shard struct {
 type entry struct {
 	value   []byte
 	version uint64
+
+	// expiresAt is the instant the entry stops being visible. The zero
+	// value means the entry never expires.
+	expiresAt time.Time
 }
 
 // Item is a value together with its version. Versions start at 1 and
@@ -71,6 +79,7 @@ func New(opts Options) *Store {
 		shards: make([]*shard, opts.Shards),
 		mask:   uint32(opts.Shards - 1),
 		opts:   opts,
+		now:    time.Now,
 	}
 	for i := range s.shards {
 		s.shards[i] = &shard{items: make(map[string]*entry)}
@@ -78,38 +87,32 @@ func New(opts Options) *Store {
 	return s
 }
 
-// Get returns a copy of the value stored under key.
+// Get returns a copy of the value stored under key. Expired entries are
+// reported as missing and removed lazily.
 func (s *Store) Get(key string) (Item, error) {
 	sh := s.shardFor(key)
-	sh.mu.RLock()
-	defer sh.mu.RUnlock()
+	now := s.now()
 
+	sh.mu.RLock()
 	e, ok := sh.items[key]
 	if !ok {
+		sh.mu.RUnlock()
 		return Item{}, ErrNotFound
 	}
-	return Item{Value: clone(e.value), Version: e.version}, nil
+	if e.expired(now) {
+		sh.mu.RUnlock()
+		s.Delete(key)
+		return Item{}, ErrNotFound
+	}
+	it := Item{Value: clone(e.value), Version: e.version}
+	sh.mu.RUnlock()
+	return it, nil
 }
 
-// Set stores a copy of value under key, replacing any existing value, and
-// returns the new version.
+// Set stores a copy of value under key, replacing any existing value and
+// clearing any expiry, and returns the new version.
 func (s *Store) Set(key string, value []byte) (uint64, error) {
-	if err := s.validate(key, value); err != nil {
-		return 0, err
-	}
-	v := clone(value)
-
-	sh := s.shardFor(key)
-	sh.mu.Lock()
-	defer sh.mu.Unlock()
-
-	if e, ok := sh.items[key]; ok {
-		e.value = v
-		e.version++
-		return e.version, nil
-	}
-	sh.items[key] = &entry{value: v, version: 1}
-	return 1, nil
+	return s.SetWithTTL(key, value, 0)
 }
 
 // Delete removes key and reports whether it was present.
@@ -136,14 +139,15 @@ func (s *Store) Len() int {
 	return n
 }
 
-// Keys returns the keys that start with prefix in lexical order, at most
-// limit of them. A limit <= 0 means no limit.
+// Keys returns the unexpired keys that start with prefix in lexical order,
+// at most limit of them. A limit <= 0 means no limit.
 func (s *Store) Keys(prefix string, limit int) []string {
+	now := s.now()
 	var out []string
 	for _, sh := range s.shards {
 		sh.mu.RLock()
-		for k := range sh.items {
-			if strings.HasPrefix(k, prefix) {
+		for k, e := range sh.items {
+			if strings.HasPrefix(k, prefix) && !e.expired(now) {
 				out = append(out, k)
 			}
 		}
@@ -158,13 +162,15 @@ func (s *Store) Keys(prefix string, limit int) []string {
 
 // Stats is a point-in-time summary of the store.
 type Stats struct {
-	Keys   int   `json:"keys"`
-	Bytes  int64 `json:"bytes"`
-	Shards int   `json:"shards"`
+	Keys     int   `json:"keys"`
+	Expiring int   `json:"expiring"`
+	Bytes    int64 `json:"bytes"`
+	Shards   int   `json:"shards"`
 }
 
 // Stats walks every shard and reports key and byte counts. Byte counts
-// include key and value lengths but not map or entry overhead.
+// include key and value lengths but not map or entry overhead. Entries
+// that have expired but not yet been reclaimed are still counted.
 func (s *Store) Stats() Stats {
 	st := Stats{Shards: len(s.shards)}
 	for _, sh := range s.shards {
@@ -172,6 +178,9 @@ func (s *Store) Stats() Stats {
 		st.Keys += len(sh.items)
 		for k, e := range sh.items {
 			st.Bytes += int64(len(k) + len(e.value))
+			if !e.expiresAt.IsZero() {
+				st.Expiring++
+			}
 		}
 		sh.mu.RUnlock()
 	}
