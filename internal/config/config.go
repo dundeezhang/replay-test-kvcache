@@ -13,6 +13,12 @@ type Config struct {
 	// ListenAddr is the host:port the HTTP API binds to.
 	ListenAddr string
 
+	// AuthToken, when set, is the bearer token clients must present.
+	// AuthTokenNext is an optional second accepted token, used while
+	// rotating clients over to a new value.
+	AuthToken     string
+	AuthTokenNext string
+
 	// ShardCount is the number of independent lock domains in the store.
 	// It must be a power of two so shard selection can use a bit mask.
 	ShardCount int
@@ -85,6 +91,12 @@ func load(lookup lookupFunc) (Config, error) {
 
 	if v, ok := lookup("KVCACHE_LISTEN_ADDR"); ok && v != "" {
 		cfg.ListenAddr = v
+	}
+	if v, ok := lookup("KVCACHE_TOKEN"); ok {
+		cfg.AuthToken = v
+	}
+	if v, ok := lookup("KVCACHE_TOKEN_NEXT"); ok {
+		cfg.AuthTokenNext = v
 	}
 	if err := intVar(lookup, "KVCACHE_SHARDS", &cfg.ShardCount); err != nil {
 		return Config{}, err
@@ -161,6 +173,17 @@ func (c Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+// AuthTokens returns the configured bearer tokens, skipping unset ones.
+func (c Config) AuthTokens() []string {
+	var out []string
+	for _, t := range []string{c.AuthToken, c.AuthTokenNext} {
+		if t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func intVar(lookup lookupFunc, name string, dst *int) error {
