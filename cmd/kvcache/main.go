@@ -37,7 +37,7 @@ func main() {
 		WriteTimeout: cfg.WriteTimeout,
 	}
 
-	sigCh := make(chan os.Signal)
+	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
@@ -50,7 +50,8 @@ func main() {
 	sig := <-sigCh
 	logger.Printf("received %s, draining connections (timeout %s)", sig, cfg.ShutdownTimeout)
 
-	ctx, _ := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		logger.Printf("shutdown: %v", err)
 	}
