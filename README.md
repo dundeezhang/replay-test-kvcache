@@ -1,8 +1,8 @@
 # kvcache
 
 kvcache is a small in-memory key/value cache with an HTTP API. It is meant to
-sit next to a service as a fast, disposable lookaside cache: no replication,
-no persistence, and no clustering.
+sit next to a service as a fast lookaside cache: no replication and no
+clustering. Optional on-disk snapshots let a restarted node come back warm.
 
 ## Design
 
@@ -51,6 +51,24 @@ All settings come from environment variables.
 | `KVCACHE_WRITE_TIMEOUT` | `5s` | Per-request write timeout. |
 | `KVCACHE_SHUTDOWN_TIMEOUT` | `15s` | How long to drain in-flight requests after `SIGTERM`/`SIGINT`. |
 | `KVCACHE_LOG_REQUESTS` | `false` | Log one line per request. |
+| `KVCACHE_SNAPSHOT_DIR` | unset | Directory for snapshots. Snapshots are disabled when unset. |
+| `KVCACHE_SNAPSHOT_INTERVAL` | `5m` | Time between periodic snapshots (minimum `1s`). |
+| `KVCACHE_SNAPSHOT_RETAIN` | `3` | Number of snapshot files to keep. |
+
+## Persistence
+
+When `KVCACHE_SNAPSHOT_DIR` is set, kvcache writes the whole store to
+`snapshot-<unix-nanos>.kvs` every `KVCACHE_SNAPSHOT_INTERVAL` and keeps the newest
+`KVCACHE_SNAPSHOT_RETAIN` files. Each file is written to a temporary name and
+renamed into place, and ends with a CRC-32C checksum.
+
+At startup the newest snapshot is loaded before the API starts listening. A
+snapshot that fails its checksum is skipped and the next older one is tried.
+Shards are exported one at a time, so taking a snapshot only briefly blocks
+writers to the shard being copied.
+
+Writes made after the last snapshot are lost on restart; treat snapshots as a
+warm start, not durable storage.
 
 ## API
 
@@ -59,6 +77,7 @@ All settings come from environment variables.
 | `GET` | `/healthz` | Liveness probe. |
 | `GET` | `/metrics` | Prometheus metrics in text format. |
 | `GET` | `/v1/stats` | Key count, approximate bytes, and shard count. |
+| `POST` | `/v1/admin/snapshot` | Write a snapshot now. `503` if snapshots are disabled. |
 | `GET` | `/v1/keys?prefix=&limit=` | List keys in lexical order. |
 | `GET` | `/v1/keys/{key}` | Fetch a value. Returns `404` if missing. |
 | `PUT` | `/v1/keys/{key}?ttl=` | Store the request body as the value, optionally expiring after `ttl` seconds. |

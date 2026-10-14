@@ -77,3 +77,24 @@ func TestLoadRejectsInvalid(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadSnapshotSettings(t *testing.T) {
+	cfg, err := load(env(map[string]string{
+		"KVCACHE_SNAPSHOT_DIR":      "/var/lib/kvcache",
+		"KVCACHE_SNAPSHOT_INTERVAL": "30s",
+		"KVCACHE_SNAPSHOT_RETAIN":   "5",
+	}))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.SnapshotDir != "/var/lib/kvcache" || cfg.SnapshotInterval != 30*time.Second || cfg.SnapshotRetain != 5 {
+		t.Fatalf("snapshot settings = %q %s %d", cfg.SnapshotDir, cfg.SnapshotInterval, cfg.SnapshotRetain)
+	}
+
+	if _, err := load(env(map[string]string{
+		"KVCACHE_SNAPSHOT_DIR":      "/var/lib/kvcache",
+		"KVCACHE_SNAPSHOT_INTERVAL": "10ms",
+	})); err == nil {
+		t.Fatal("expected an error for a sub-second snapshot interval")
+	}
+}
