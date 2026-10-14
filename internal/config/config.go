@@ -23,6 +23,12 @@ type Config struct {
 	// MaxKeyBytes caps the length of a key.
 	MaxKeyBytes int
 
+	// JanitorInterval is how often the background janitor samples shards
+	// for expired keys, and JanitorSampleSize is how many entries it
+	// examines per shard per pass.
+	JanitorInterval   time.Duration
+	JanitorSampleSize int
+
 	// ReadTimeout and WriteTimeout bound a single HTTP request.
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
@@ -39,6 +45,9 @@ func Default() Config {
 		ShardCount:    64,
 		MaxValueBytes: 1 << 20,
 		MaxKeyBytes:   250,
+
+		JanitorInterval:   time.Second,
+		JanitorSampleSize: 20,
 
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 5 * time.Second,
@@ -70,6 +79,12 @@ func load(lookup lookupFunc) (Config, error) {
 	if err := intVar(lookup, "KVCACHE_MAX_KEY_BYTES", &cfg.MaxKeyBytes); err != nil {
 		return Config{}, err
 	}
+	if err := durationVar(lookup, "KVCACHE_JANITOR_INTERVAL", &cfg.JanitorInterval); err != nil {
+		return Config{}, err
+	}
+	if err := intVar(lookup, "KVCACHE_JANITOR_SAMPLE_SIZE", &cfg.JanitorSampleSize); err != nil {
+		return Config{}, err
+	}
 	if err := durationVar(lookup, "KVCACHE_READ_TIMEOUT", &cfg.ReadTimeout); err != nil {
 		return Config{}, err
 	}
@@ -90,6 +105,12 @@ func load(lookup lookupFunc) (Config, error) {
 func (c Config) Validate() error {
 	if c.ShardCount <= 0 || c.ShardCount&(c.ShardCount-1) != 0 {
 		return fmt.Errorf("config: KVCACHE_SHARDS must be a positive power of two, got %d", c.ShardCount)
+	}
+	if c.JanitorInterval < 10*time.Millisecond {
+		return fmt.Errorf("config: KVCACHE_JANITOR_INTERVAL must be at least 10ms, got %s", c.JanitorInterval)
+	}
+	if c.JanitorSampleSize <= 0 {
+		return fmt.Errorf("config: KVCACHE_JANITOR_SAMPLE_SIZE must be positive, got %d", c.JanitorSampleSize)
 	}
 	if c.MaxValueBytes <= 0 {
 		return fmt.Errorf("config: KVCACHE_MAX_VALUE_BYTES must be positive, got %d", c.MaxValueBytes)

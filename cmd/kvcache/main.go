@@ -25,6 +25,13 @@ func main() {
 		MaxValueBytes: cfg.MaxValueBytes,
 	})
 
+	janitor := store.NewJanitor(st, store.JanitorOptions{
+		Interval:   cfg.JanitorInterval,
+		SampleSize: cfg.JanitorSampleSize,
+		Logger:     logger,
+	})
+	janitor.Start()
+
 	api := server.New(st, cfg, logger)
 
 	srv := &http.Server{
