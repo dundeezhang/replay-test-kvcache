@@ -103,3 +103,16 @@ func TestNegativeTTLQueryParamRejected(t *testing.T) {
 		t.Fatalf("PUT with negative ttl = %d, want 400", resp.StatusCode)
 	}
 }
+
+func TestSetRejectsMalformedTTL(t *testing.T) {
+	_, ts := newTestServer(t)
+	for _, raw := range []string{"abc", "1.5", "10s", "999999999999"} {
+		resp, body := do(t, http.MethodPut, ts.URL+"/v1/keys/k?ttl="+raw, "v")
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("PUT ?ttl=%s = %d, want 400 (%s)", raw, resp.StatusCode, body)
+		}
+	}
+	if resp, _ := do(t, http.MethodGet, ts.URL+"/v1/keys/k", ""); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("a write with a rejected ttl was stored (GET = %d)", resp.StatusCode)
+	}
+}

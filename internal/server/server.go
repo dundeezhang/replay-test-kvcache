@@ -114,10 +114,10 @@ func (s *Server) handleSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var ttl time.Duration
-	if raw := r.URL.Query().Get("ttl"); raw != "" {
-		secs, _ := strconv.Atoi(raw)
-		ttl = time.Duration(secs) * time.Second
+	ttl, err := parseTTLParam(r.URL.Query().Get("ttl"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	version, err := s.store.SetWithTTL(key, body, ttl)

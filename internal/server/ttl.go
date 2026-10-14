@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/dundeezhang/replay-test-kvcache/internal/store"
@@ -12,6 +13,19 @@ import (
 // maxTTLSeconds caps client-supplied TTLs at ten years. Anything longer is
 // almost certainly a unit mistake (milliseconds sent as seconds).
 const maxTTLSeconds = 10 * 365 * 24 * 60 * 60
+
+// parseTTLParam parses the optional ?ttl= query parameter, given in whole
+// seconds. An empty value means the key does not expire.
+func parseTTLParam(raw string) (time.Duration, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	secs, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || secs < 0 || secs > maxTTLSeconds {
+		return 0, fmt.Errorf("ttl must be a whole number of seconds between 0 and %d", maxTTLSeconds)
+	}
+	return time.Duration(secs) * time.Second, nil
+}
 
 type ttlResponse struct {
 	Key string `json:"key"`
