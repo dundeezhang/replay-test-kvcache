@@ -36,6 +36,7 @@ All settings come from environment variables.
 | `KVCACHE_MAX_KEY_BYTES` | `250` | Longest accepted key. |
 | `KVCACHE_READ_TIMEOUT` | `5s` | Per-request read timeout. |
 | `KVCACHE_WRITE_TIMEOUT` | `5s` | Per-request write timeout. |
+| `KVCACHE_SHUTDOWN_TIMEOUT` | `15s` | How long to drain in-flight requests after `SIGTERM`/`SIGINT`. |
 | `KVCACHE_LOG_REQUESTS` | `false` | Log one line per request. |
 
 ## API
