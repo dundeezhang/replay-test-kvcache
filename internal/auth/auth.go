@@ -2,6 +2,7 @@
 package auth
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"io"
 	"log"
@@ -91,13 +92,14 @@ func (m *Middleware) Wrap(next http.Handler) http.Handler {
 	})
 }
 
+// valid compares tok against every configured token in constant time so
+// response timing does not reveal how much of a guess was correct.
 func (m *Middleware) valid(tok string) bool {
+	ok := 0
 	for _, want := range m.tokens {
-		if tok == want {
-			return true
-		}
+		ok |= subtle.ConstantTimeCompare([]byte(tok), []byte(want))
 	}
-	return false
+	return ok == 1
 }
 
 // bearerToken extracts the credential from an RFC 6750 Authorization
