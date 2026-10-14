@@ -14,6 +14,17 @@ no persistence, and no clustering.
 - The store copies values on the way in and on the way out, so callers never
   share memory with the cache.
 
+## Observability
+
+`GET /metrics` serves Prometheus text-format metrics without any client
+library dependency:
+
+- `kvcache_http_requests_total{method,path,code}`: completed requests.
+- `kvcache_http_request_duration_seconds{path}`: latency histogram with
+  buckets from 100µs to 1s.
+- `kvcache_keys`, `kvcache_shards`, `kvcache_uptime_seconds`: gauges sampled at
+  scrape time.
+
 ## Building
 
 ```sh
@@ -45,6 +56,7 @@ All settings come from environment variables.
 | Method | Path | Description |
 | --- | --- | --- |
 | `GET` | `/healthz` | Liveness probe. |
+| `GET` | `/metrics` | Prometheus metrics in text format. |
 | `GET` | `/v1/stats` | Key count, approximate bytes, and shard count. |
 | `GET` | `/v1/keys?prefix=&limit=` | List keys in lexical order. |
 | `GET` | `/v1/keys/{key}` | Fetch a value. Returns `404` if missing. |

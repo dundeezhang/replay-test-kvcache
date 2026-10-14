@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dundeezhang/replay-test-kvcache/internal/config"
+	"github.com/dundeezhang/replay-test-kvcache/internal/metrics"
 	"github.com/dundeezhang/replay-test-kvcache/internal/store"
 )
 
@@ -19,6 +20,7 @@ type Server struct {
 	store     *store.Store
 	cfg       config.Config
 	mux       *http.ServeMux
+	metrics   *metrics.Registry
 	logger    *log.Logger
 	startedAt time.Time
 }
@@ -32,15 +34,18 @@ func New(st *store.Store, cfg config.Config, logger *log.Logger) *Server {
 		store:     st,
 		cfg:       cfg,
 		mux:       http.NewServeMux(),
+		metrics:   metrics.NewRegistry(),
 		logger:    logger,
 		startedAt: time.Now(),
 	}
 	s.routes()
+	s.registerGauges()
 	return s
 }
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", s.handleHealth)
+	s.mux.HandleFunc("GET /metrics", s.handleMetrics)
 	s.mux.HandleFunc("GET /v1/stats", s.handleStats)
 	s.mux.HandleFunc("GET /v1/keys", s.handleListKeys)
 	s.mux.HandleFunc("GET /v1/keys/{key}", s.handleGet)
@@ -54,6 +59,7 @@ func (s *Server) routes() {
 // Handler returns the root HTTP handler with middleware applied.
 func (s *Server) Handler() http.Handler {
 	var h http.Handler = s.mux
+	h = s.instrument(h)
 	if s.cfg.LogRequests {
 		h = s.logRequests(h)
 	}
